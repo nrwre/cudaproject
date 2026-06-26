@@ -5,13 +5,18 @@ anomaly[t] = 1 if |z| > threshold, where z = (x[t] - mean) / std over the
 window immediately preceding t (indices [t-window, t-1]). First `window`
 points of each series are never flagged (no full window available yet).
 
-Computation is kept in float32 to match the GPU kernel's precision, so
-validation differences are due to summation order, not dtype mismatch.
+Uses cumulative sums (O(num_timesteps) per sensor instead of O(num_timesteps
+* window) from materializing a sliding-window tensor) and processes sensors
+in batches, so peak memory stays bounded by batch size rather than growing
+with total sensor count — needed for this project's claimed scale of
+thousands of streams.
 """
 import struct
 import sys
 import time
 import numpy as np
+
+_BATCH_SIZE = 4096
 
 
 def rolling_zscore_cpu(data: np.ndarray, window: int, threshold: float) -> np.ndarray:
@@ -22,20 +27,29 @@ def rolling_zscore_cpu(data: np.ndarray, window: int, threshold: float) -> np.nd
     if num_timesteps <= window:
         return anomalies
 
-    windows = np.lib.stride_tricks.sliding_window_view(data, window, axis=1)
-    windows = windows[:, : num_timesteps - window, :]  # i = t - window, t in [window, num_timesteps-1]
+    t_idx = np.arange(window, num_timesteps)
 
-    mean = windows.mean(axis=2, dtype=np.float32)
-    diff = windows - mean[:, :, np.newaxis]
-    std_dev = np.sqrt((diff * diff).mean(axis=2, dtype=np.float32))
+    for start in range(0, num_sensors, _BATCH_SIZE):
+        end = min(start + _BATCH_SIZE, num_sensors)
+        batch = data[start:end].astype(np.float64)
+        zeros_col = np.zeros((end - start, 1), dtype=np.float64)
 
-    current = data[:, window:]
-    z = np.zeros_like(current)
-    valid = std_dev > 1e-6
-    z[valid] = (current[valid] - mean[valid]) / std_dev[valid]
+        cumsum = np.concatenate([zeros_col, np.cumsum(batch, axis=1)], axis=1)
+        cumsum_sq = np.concatenate([zeros_col, np.cumsum(batch * batch, axis=1)], axis=1)
 
-    flags = (np.abs(z) > threshold).astype(np.uint8)
-    anomalies[:, window:] = flags
+        sum_window = cumsum[:, t_idx] - cumsum[:, t_idx - window]
+        sumsq_window = cumsum_sq[:, t_idx] - cumsum_sq[:, t_idx - window]
+
+        mean = sum_window / window
+        var = np.clip(sumsq_window / window - mean * mean, 0.0, None)
+        std_dev = np.sqrt(var)
+
+        current = batch[:, t_idx]
+        z = np.zeros_like(current)
+        valid = std_dev > 1e-6
+        z[valid] = (current[valid] - mean[valid]) / std_dev[valid]
+
+        anomalies[start:end, window:] = (np.abs(z) > threshold).astype(np.uint8)
 
     return anomalies
 
