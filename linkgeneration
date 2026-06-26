@@ -1,4 +1,0 @@
-powershell -ExecutionPolicy Bypass -File deploy\start_demo.ps1
-
-Your quick Tunnel has been created! Visit it at...
-https://some-random-words.trycloudflare.com
