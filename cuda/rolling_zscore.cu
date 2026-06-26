@@ -7,10 +7,17 @@
 // baseline; the week-2 task is to transpose to time-major layout (data[t * num_sensors + sensor])
 // so a warp's simultaneous reads at a given t land in one contiguous segment, and measure
 // the throughput difference.
+//
+// I/O format (so CUDA and the NumPy reference run on identical data, for validation):
+// input file header: int32 num_sensors, int32 num_timesteps, int32 window, float32 threshold
+//   followed by num_sensors*num_timesteps float32, sensor-major.
+// output file header: int32 num_sensors, int32 num_timesteps
+//   followed by num_sensors*num_timesteps uint8 (1 = anomaly).
 #include <cuda_runtime.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 __global__ void rollingZScore(
@@ -53,25 +60,47 @@ __global__ void rollingZScore(
     }
 }
 
-int main() {
-    const int num_sensors = 4096;
-    const int num_timesteps = 2048;
-    const int window = 32;
-    const float threshold = 3.0f;
+struct InputHeader {
+    int32_t num_sensors;
+    int32_t num_timesteps;
+    int32_t window;
+    float threshold;
+};
 
+int main(int argc, char** argv) {
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <input.bin> <output.bin>\n", argv[0]);
+        return 1;
+    }
+
+    FILE* fin = fopen(argv[1], "rb");
+    if (!fin) {
+        fprintf(stderr, "Failed to open input file: %s\n", argv[1]);
+        return 1;
+    }
+
+    InputHeader header;
+    if (fread(&header, sizeof(header), 1, fin) != 1) {
+        fprintf(stderr, "Failed to read header\n");
+        fclose(fin);
+        return 1;
+    }
+
+    const int num_sensors = header.num_sensors;
+    const int num_timesteps = header.num_timesteps;
+    const int window = header.window;
+    const float threshold = header.threshold;
     const size_t n = (size_t)num_sensors * num_timesteps;
-    std::vector<float> h_data(n);
-    std::vector<unsigned char> h_anomalies(n);
 
-    srand(42);
-    for (size_t i = 0; i < n; ++i) {
-        float noise = ((float)rand() / RAND_MAX - 0.5f) * 2.0f;
-        h_data[i] = noise;
+    std::vector<float> h_data(n);
+    if (fread(h_data.data(), sizeof(float), n, fin) != n) {
+        fprintf(stderr, "Failed to read data\n");
+        fclose(fin);
+        return 1;
     }
-    // inject a handful of obvious spikes to sanity-check detection
-    for (int s = 0; s < num_sensors; s += 512) {
-        h_data[(size_t)s * num_timesteps + num_timesteps / 2] = 50.0f;
-    }
+    fclose(fin);
+
+    std::vector<unsigned char> h_anomalies(n);
 
     float* d_data;
     unsigned char* d_anomalies;
@@ -101,9 +130,19 @@ int main() {
         flagged += h_anomalies[i];
     }
 
-    printf("Sensors: %d, timesteps: %d, window: %d\n", num_sensors, num_timesteps, window);
-    printf("Kernel time: %.3f ms\n", ms);
-    printf("Anomalies flagged: %d\n", flagged);
+    fprintf(stderr, "Sensors: %d, timesteps: %d, window: %d\n", num_sensors, num_timesteps, window);
+    fprintf(stderr, "Kernel time: %.3f ms\n", ms);
+    fprintf(stderr, "Anomalies flagged: %d\n", flagged);
+
+    FILE* fout = fopen(argv[2], "wb");
+    if (!fout) {
+        fprintf(stderr, "Failed to open output file: %s\n", argv[2]);
+        return 1;
+    }
+    int32_t out_header[2] = { (int32_t)num_sensors, (int32_t)num_timesteps };
+    fwrite(out_header, sizeof(int32_t), 2, fout);
+    fwrite(h_anomalies.data(), sizeof(unsigned char), n, fout);
+    fclose(fout);
 
     cudaEventDestroy(start);
     cudaEventDestroy(stop);

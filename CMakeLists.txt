@@ -13,3 +13,5 @@ endif()
 add_executable(vector_add cuda/vector_add.cu)
 
 add_executable(rolling_zscore cuda/rolling_zscore.cu)
+
+add_executable(rolling_zscore_coalesced cuda/rolling_zscore_coalesced.cu)
