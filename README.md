@@ -75,3 +75,18 @@ powershell -ExecutionPolicy Bypass -File deploy\start_demo.ps1
 ```
 
 This builds the frontend if needed, starts the FastAPI backend on port 8010 (serving both the API and the built frontend), and opens a free Cloudflare quick tunnel. The printed `*.trycloudflare.com` URL is public but **only live while this is running** — it's a tunnel to this machine, not hosted infrastructure, and the URL changes on every restart (no Cloudflare account / owned domain needed for this mode). For the live GPU path, run `notebooks/colab_dev.ipynb` instead.
+
+### Getting the link after every restart (sleep, reboot, closed terminal, etc.)
+
+Every time you sleep/reboot this machine or close the terminal, both the backend and the tunnel stop — the old URL goes dead. To get a new one, just re-run the same command and watch the terminal output for a new block like this:
+
+```
+powershell -ExecutionPolicy Bypass -File deploy\start_demo.ps1
+
+...
+Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):
+https://some-random-words.trycloudflare.com
+...
+```
+
+That `https://...trycloudflare.com` line is the new public link — copy it and share it. If Windows shows a firewall prompt for Python or `cloudflared` asking about public/private network access, click **Allow** — declining it breaks the tunnel or the backend's ability to accept connections.
