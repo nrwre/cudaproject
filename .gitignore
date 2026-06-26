@@ -1,0 +1,14 @@
+build/
+*.exe
+*.exp
+*.lib
+*.pdb
+*.obj
+*.o
+__pycache__/
+*.pyc
+.vs/
+*.user
+node_modules/
+dist/
+.env
