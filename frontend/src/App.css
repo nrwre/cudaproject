@@ -15,6 +15,58 @@
   margin-bottom: 24px;
 }
 
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.tab {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #333);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tab--active {
+  background: #4f8cff;
+  border-color: #4f8cff;
+  color: white;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.metric-card {
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.metric-card--alert {
+  border-color: #ff4f4f;
+}
+
+.metric-card__header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 4px;
+  color: var(--text-2, #888);
+}
+
+.metric-card__value {
+  color: inherit;
+  font-weight: 600;
+}
+
 .controls {
   display: flex;
   flex-wrap: wrap;

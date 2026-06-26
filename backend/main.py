@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "python"))
 from cpu_baseline import rolling_zscore_cpu  # noqa: E402
+from live_metrics import MetricBuffers  # noqa: E402
 
 # anomaly_gpu (the pybind11 extension) is built in the repo root.
 sys.path.insert(0, str(_REPO_ROOT))
@@ -41,6 +42,17 @@ app.add_middleware(
 # "/" below (and so the frontend's default API_BASE of "/api" works
 # unmodified whether it's served by this same process or proxied in dev).
 api = APIRouter(prefix="/api")
+
+_live_metrics = MetricBuffers()
+
+
+@app.on_event("startup")
+def _start_live_metrics():
+    _live_metrics.start()
+
+
+LIVE_WINDOW = 10
+LIVE_THRESHOLD = 3.0
 
 
 class RunRequest(BaseModel):
@@ -116,6 +128,41 @@ def run(req: RunRequest):
     }
 
     return result
+
+
+@api.get("/live")
+def live():
+    """Real hardware metrics from this machine (per-core CPU%, memory, disk/net
+    throughput, GPU temp/util if available), with the same rolling z-score
+    detector applied to each stream — real continuously-updating data, not
+    the synthetic benchmark dataset used by /run."""
+    snapshot = _live_metrics.snapshot()
+    names = sorted(snapshot.keys())
+
+    if not names:
+        return {"metrics": [], "window": LIVE_WINDOW, "threshold": LIVE_THRESHOLD}
+
+    min_len = min(len(snapshot[n]) for n in names)
+    if min_len <= LIVE_WINDOW:
+        return {
+            "metrics": [{"name": n, "values": snapshot[n], "anomaly_indices": []} for n in names],
+            "window": LIVE_WINDOW,
+            "threshold": LIVE_THRESHOLD,
+            "note": "collecting history, not enough samples yet for anomaly detection",
+        }
+
+    matrix = np.array([snapshot[n][-min_len:] for n in names], dtype=np.float32)
+    anomalies = rolling_zscore_cpu(matrix, LIVE_WINDOW, LIVE_THRESHOLD)
+
+    metrics = []
+    for i, name in enumerate(names):
+        metrics.append({
+            "name": name,
+            "values": matrix[i].tolist(),
+            "anomaly_indices": np.where(anomalies[i] == 1)[0].tolist(),
+        })
+
+    return {"metrics": metrics, "window": LIVE_WINDOW, "threshold": LIVE_THRESHOLD}
 
 
 app.include_router(api)

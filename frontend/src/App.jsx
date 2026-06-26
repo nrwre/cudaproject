@@ -3,6 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar,
 } from 'recharts'
+import LiveMonitor from './LiveMonitor'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -26,6 +27,7 @@ function buildSignalData(values, anomalyIndices) {
 }
 
 function App() {
+  const [tab, setTab] = useState('live')
   const [form, setForm] = useState(DEFAULTS)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -72,9 +74,22 @@ function App() {
     <div className="dashboard">
       <h1>GPU-Accelerated Sensor Anomaly Detector</h1>
       <p className="subtitle">
-        Rolling z-score anomaly detection across simulated sensor streams — CUDA kernel vs NumPy baseline.
+        Rolling z-score anomaly detection — live on this machine's real hardware, or as a synthetic CUDA vs NumPy benchmark.
       </p>
 
+      <div className="tabs">
+        <button className={tab === 'live' ? 'tab tab--active' : 'tab'} onClick={() => setTab('live')}>
+          Live monitor (real data)
+        </button>
+        <button className={tab === 'benchmark' ? 'tab tab--active' : 'tab'} onClick={() => setTab('benchmark')}>
+          Synthetic benchmark
+        </button>
+      </div>
+
+      {tab === 'live' && <LiveMonitor />}
+
+      {tab === 'benchmark' && (
+        <>
       <section className="controls">
         <label>
           Sensors
@@ -165,6 +180,8 @@ function App() {
               </table>
             </div>
           </section>
+        </>
+      )}
         </>
       )}
     </div>
