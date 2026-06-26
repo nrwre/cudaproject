@@ -10,8 +10,9 @@ import time
 from pathlib import Path
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +37,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Routes live under /api so they coexist with the static frontend mounted at
+# "/" below (and so the frontend's default API_BASE of "/api" works
+# unmodified whether it's served by this same process or proxied in dev).
+api = APIRouter(prefix="/api")
+
 
 class RunRequest(BaseModel):
     num_sensors: int = Field(default=4096, gt=0, le=200_000)
@@ -54,12 +60,12 @@ def make_data(num_sensors, num_timesteps, seed):
     return data
 
 
-@app.get("/health")
+@api.get("/health")
 def health():
     return {"status": "ok", "gpu_available": GPU_AVAILABLE}
 
 
-@app.post("/run")
+@api.post("/run")
 def run(req: RunRequest):
     if req.window >= req.num_timesteps:
         raise HTTPException(status_code=400, detail="window must be smaller than num_timesteps")
@@ -110,3 +116,13 @@ def run(req: RunRequest):
     }
 
     return result
+
+
+app.include_router(api)
+
+# Serve the built frontend (frontend/dist) if present, so the whole app is one
+# process behind one port — convenient for a single Cloudflare Tunnel. Must be
+# mounted last so it doesn't shadow the /api routes above.
+_FRONTEND_DIST = _REPO_ROOT / "frontend" / "dist"
+if _FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(_FRONTEND_DIST), html=True), name="frontend")

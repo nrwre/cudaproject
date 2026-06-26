@@ -6,7 +6,7 @@ Industrial/IoT sensor monitoring (vibration, temperature, pressure, current draw
 
 ## Status
 
-Week 3 of 4 complete: kernels validated, memory-access-pattern optimization measured, pybind11 + FastAPI backend built and benchmarked end-to-end on a real GPU.
+Week 4 of 4 in progress: dashboard built, demo deployable via Cloudflare Tunnel.
 
 GPU development happens on a Colab T4 GPU (`notebooks/colab_dev.ipynb`) rather than a local CUDA install — see "Dev environment" below.
 
@@ -21,8 +21,10 @@ GPU development happens on a Colab T4 GPU (`notebooks/colab_dev.ipynb`) rather t
 - `python/cpu_baseline.py` — vectorized NumPy reference implementation (cumulative-sum based, O(n) memory)
 - `python/validate.py` — exact diff between CPU and GPU anomaly output on identical input
 - `python/benchmark.py` — CPU vs GPU throughput comparison across sensor counts
-- `backend/main.py` — FastAPI endpoint: generate data, run CPU + GPU, return anomalies + timing
+- `backend/main.py` — FastAPI endpoint: generate data, run CPU + GPU, return anomalies + timing; also serves the built frontend (`frontend/dist`) as static files when present, so the whole app runs behind one port
+- `frontend/` — React + Vite dashboard (signal chart, flagged-sensor table, CPU/GPU timing bar)
 - `notebooks/colab_dev.ipynb` — GPU dev/build/validate/benchmark workflow
+- `deploy/start_demo.ps1` — builds the frontend, starts the backend, and opens a Cloudflare quick tunnel
 
 ## Dev environment
 
@@ -63,3 +65,13 @@ CPU (NumPy, cumulative-sum vectorized) vs GPU (coalesced kernel via the pybind11
 | 65,536  | 22,719.2 | 55.5 | **409x** | 2,289 |
 
 The speedup grows with scale because the kernel is memory-bound and the GPU has far more memory bandwidth and parallelism to exploit — the CPU baseline is itself vectorized (not a naive Python loop), so this isn't a "Python is slow" trick, it's NumPy's best vectorized version against the GPU's.
+
+## Running the live demo
+
+This serves CPU-only results (no local CUDA toolkit on the demo machine) behind a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/), with the demo machine acting as the server:
+
+```
+powershell -ExecutionPolicy Bypass -File deploy\start_demo.ps1
+```
+
+This builds the frontend if needed, starts the FastAPI backend on port 8010 (serving both the API and the built frontend), and opens a free Cloudflare quick tunnel. The printed `*.trycloudflare.com` URL is public but **only live while this is running** — it's a tunnel to this machine, not hosted infrastructure, and the URL changes on every restart (no Cloudflare account / owned domain needed for this mode). For the live GPU path, run `notebooks/colab_dev.ipynb` instead.
