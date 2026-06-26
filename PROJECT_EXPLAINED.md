@@ -38,6 +38,14 @@ Now imagine doing that for 4,096 sensors, for 2,048 time points each, which is w
 
 ---
 
+## Part 2.5: this isn't only fake data — there's a real-data mode too
+
+Everything below in Part 3 describes the "Synthetic benchmark" tab — useful for proving the GPU speedup with a controlled experiment, but it's invented data, regenerated fresh each click. That's fine for measuring raw speed, but on its own it's not something you'd ever actually *use*.
+
+So the dashboard also has a **"Live monitor" tab**, which runs the exact same math on real data: your own laptop's actual CPU usage (per core), memory usage, disk read/write speed, network traffic, and GPU temperature, sampled every second. This is a real "sensor stream" in the literal sense — each CPU core's usage over time is its own time series, checked for anomalies the same way a vibration sensor would be. If one core suddenly spikes to 100% while the others sit idle, that's a genuine anomaly the same z-score math would catch — not a planted example, an actual measurement of your actual machine right now.
+
+---
+
 ## Part 3: What happens when you click "Run detection"
 
 1. **The browser (frontend)** sends your numbers (4096 sensors, 2048 timesteps, window 32, threshold 3) to a server as a request — basically "hey, generate some fake sensor data with these settings and tell me which points look anomalous."

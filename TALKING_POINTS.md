@@ -52,8 +52,13 @@ Correctness isn't asserted, it's diffed: `python/generate_data.py` writes one bi
 `cuda/kernels.cu` (kernels + launchers, shared by everything below) →
 - `cuda/rolling_zscore.cu` / `rolling_zscore_coalesced.cu`: standalone executables, file-based I/O, used for validation and the executable-level timing comparison
 - `cuda/bindings.cpp`: pybind11 extension exposing the same kernels to Python as NumPy-array-in/out functions
-- `backend/main.py`: FastAPI endpoint generating data, running CPU + GPU, returning anomalies and timing as JSON
-- `frontend/`: React + Vite dashboard — signal chart with anomalies marked, flagged-sensor table, CPU-vs-GPU timing bar
+- `backend/main.py`: FastAPI endpoints — `/run` (synthetic benchmark: generates data, runs CPU + GPU, returns anomalies and timing) and `/live` (real hardware metrics, see below)
+- `python/live_metrics.py`: background collector sampling this machine's actual per-core CPU usage, memory, disk/network throughput, and GPU temp/utilization into ring buffers
+- `frontend/`: React + Vite dashboard with two tabs — the synthetic CPU-vs-GPU benchmark, and a live monitor running the same detector on real, continuously-updating hardware metrics
+
+## Why there's a "live monitor" tab, not just a benchmark
+
+A fair pushback on this project as originally scoped: "we already know GPUs are faster at parallel work, so a benchmark proving that in isolation isn't a *useful* artifact, just a demonstration." That's correct, and worth saying out loud if asked rather than oversell the benchmark as a product. The fix wasn't to abandon the benchmark (it's still the right way to prove the *specific* memory-access-pattern mechanism, with a controlled before/after) — it was to add a second, genuinely practical artifact: the exact same rolling z-score detector, unmodified, running continuously on real data from this machine's own hardware sensors (CPU cores, memory, disk, network, GPU). That's something you'd actually glance at, not just a number you compute once and report. Per-CPU-core usage in particular is a direct, real-world instance of "one independent time series per sensor" — same shape of problem as the original industrial-IoT pitch, just running on a laptop instead of a factory floor.
 
 ## Honest caveats, if asked
 

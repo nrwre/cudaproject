@@ -21,8 +21,9 @@ GPU development happens on a Colab T4 GPU (`notebooks/colab_dev.ipynb`) rather t
 - `python/cpu_baseline.py` — vectorized NumPy reference implementation (cumulative-sum based, O(n) memory)
 - `python/validate.py` — exact diff between CPU and GPU anomaly output on identical input
 - `python/benchmark.py` — CPU vs GPU throughput comparison across sensor counts
-- `backend/main.py` — FastAPI endpoint: generate data, run CPU + GPU, return anomalies + timing; also serves the built frontend (`frontend/dist`) as static files when present, so the whole app runs behind one port
-- `frontend/` — React + Vite dashboard (signal chart, flagged-sensor table, CPU/GPU timing bar)
+- `python/live_metrics.py` — background collector sampling this machine's real per-core CPU/memory/disk/network/GPU metrics into ring buffers
+- `backend/main.py` — FastAPI endpoints: `/run` (synthetic benchmark) and `/live` (real hardware metrics, same detector); also serves the built frontend (`frontend/dist`) as static files when present, so the whole app runs behind one port
+- `frontend/` — React + Vite dashboard with two tabs: a live monitor of this machine's real hardware (default), and the synthetic CPU-vs-GPU benchmark
 - `notebooks/colab_dev.ipynb` — GPU dev/build/validate/benchmark workflow
 - `deploy/start_demo.ps1` — builds the frontend, starts the backend, and opens a Cloudflare quick tunnel
 
